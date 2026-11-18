@@ -21,9 +21,21 @@ terminal_id = st.selectbox(
     "터미널 선택", ["P01 (제1여객터미널)", "P03 (제2여객터미널)"]
 )
 passenger_name = st.text_input("탑승객 성명", value="이준우")
-airline = st.text_input("편명 (Flight)", value="KE621 (ICN -> NRT)")
+airline = st.text_input("편명 (Flight)", value="KE703 (ICN -> NRT)")
 
 t_id = "P01" if "P01" in terminal_id else "P03"
+
+# API의 영문/코드형 게이트 이름을 직관적인 한글 이름으로 예쁘게 바꿔주는 함수
+def get_friendly_gate_name(gate_id):
+  gate_map = {
+      "Dgw_1": "제1 출국장 (동쪽)",
+      "Dgw_2": "제2 출국장 (중앙동쪽)",
+      "Dgw_3": "제3 출국장 (중앙서쪽)",
+      "Dgw_4": "제4 출국장 (서쪽)",
+      "Dgw_5": "제5 출국장 (동편 전용)",
+      "Dgw_6": "제6 출국장 (서편 전용)",
+  }
+  return gate_map.get(gate_id, f"출국장 ({gate_id})")
 
 if st.button("🚀 최적 보안검색대 배정 및 탑승권 발급"):
   url = f"{BASE_URL}/getDepartureCongestion"
@@ -71,13 +83,16 @@ if st.button("🚀 최적 보안검색대 배정 및 탑승권 발급"):
         valid_items = []
         for item in items:
           try:
+            raw_gate_id = str(item.get("gateId", "Dgw_1"))
+            friendly_name = get_friendly_gate_name(raw_gate_id)
             wait_time = int(item.get("waitTime", 999))
             wait_length = int(item.get("waitLength", 999))
+            
             valid_items.append({
-                "gateId": item.get("gateId"),
-                "operatingTime": item.get("operatingTime"),
-                "waitTime": wait_time,
-                "waitLength": wait_length,
+                "검색대 위치": friendly_name,
+                "운영 시간": item.get("operatingTime"),
+                "예상 대기시간(분)": wait_time,
+                "대기 인원(명)": wait_length,
             })
           except:
             continue
@@ -88,7 +103,7 @@ if st.button("🚀 최적 보안검색대 배정 및 탑승권 발급"):
               f" 확인해주세요: {data}"
           )
         else:
-          best_gate = min(valid_items, key=lambda x: x["waitTime"])
+          best_gate = min(valid_items, key=lambda x: x["예상 대기시간(분)"])
 
           st.success("✅ 실시간 데이터 분석 및 동선 분산 매칭 완료!")
 
@@ -99,21 +114,21 @@ if st.button("🚀 최적 보안검색대 배정 및 탑승권 발급"):
           with col1:
             st.metric(
                 label="🎯 추천 보안검색대",
-                value=f"{best_gate['gateId']}",
-                delta=f"예상 대기 {best_gate['waitTime']}분",
+                value=f"{best_gate['검색대 위치']}",
+                delta=f"예상 대기 {best_gate['예상 대기시간(분)']}분",
                 delta_color="normal",
             )
           with col2:
             st.metric(
                 label="👥 현재 대기 인원",
-                value=f"{best_gate['waitLength']}명",
+                value=f"{best_gate['대기 인원(명)']}명",
                 delta="가장 원활함",
             )
 
           st.warning(
               f"📌 **시스템 가이드:** 중앙부 쏠림 현상을 방지하기 위해, 고객님께서는"
-              f" 현재 가장 여유로운 **{best_gate['gateId']}** (운영시간:"
-              f" {best_gate['operatingTime']})로 이동하여 주시기 바랍니다."
+              f" 현재 가장 여유로운 **{best_gate['검색대 위치']}** (운영시간:"
+              f" {best_gate['운영 시간']})로 이동하여 주시기 바랍니다."
           )
 
           with st.expander("📊 실시간 전체 출국장 비교 데이터 확인하기"):
