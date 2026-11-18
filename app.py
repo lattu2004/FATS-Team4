@@ -25,16 +25,17 @@ airline = st.text_input("편명 (Flight)", value="KE703 (ICN -> NRT)")
 
 t_id = "P01" if "P01" in terminal_id else "P03"
 
-# API의 영문/코드형 게이트 이름을 직관적인 한글 이름으로 예쁘게 바꿔주는 함수
+# API에서 넘어오는 실제 게이트 코드(DG2_W 등)를 직관적인 한글 이름으로 변환하는 함수
 def get_friendly_gate_name(gate_id):
   gate_map = {
-      "Dgw_1": "제1 출국장 (동쪽)",
-      "Dgw_2": "제2 출국장 (중앙동쪽)",
-      "Dgw_3": "제3 출국장 (중앙서쪽)",
-      "Dgw_4": "제4 출국장 (서쪽)",
-      "Dgw_5": "제5 출국장 (동편 전용)",
-      "Dgw_6": "제6 출국장 (서편 전용)",
+      "DG1_E": "제1 출국장 (동측)",
+      "DG2_E": "제2 출국장 (동측 중앙)",
+      "DG1_W": "제1 출국장 (서측)",
+      "DG2_W": "제2 출국장 (서측 중앙)",
+      "DG3_E": "제3 출국장 (동편 전용)",
+      "DG3_W": "제3 출국장 (서편 전용)",
   }
+  # 만약 위 목록에 없는 새로운 코드가 오더라도 예쁘게 출력되도록 처리
   return gate_map.get(gate_id, f"출국장 ({gate_id})")
 
 if st.button("🚀 최적 보안검색대 배정 및 탑승권 발급"):
@@ -83,7 +84,7 @@ if st.button("🚀 최적 보안검색대 배정 및 탑승권 발급"):
         valid_items = []
         for item in items:
           try:
-            raw_gate_id = str(item.get("gateId", "Dgw_1"))
+            raw_gate_id = str(item.get("gateId", "DG1_E"))
             friendly_name = get_friendly_gate_name(raw_gate_id)
             wait_time = int(item.get("waitTime", 999))
             wait_length = int(item.get("waitLength", 999))
