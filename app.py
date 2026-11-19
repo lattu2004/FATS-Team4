@@ -1,3 +1,6 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import requests
 import streamlit as st
 
@@ -9,7 +12,7 @@ st.set_page_config(
 st.title("✈️ 인천공항 TAM 기반 스마트 보안검색대 추천 시스템")
 st.markdown(
     "실시간 출국장 혼잡도 API 데이터를 분석하여 **가장 쾌적한 보안검색대를"
-    " 자동으로 매칭**하는 스마트 발권 프로토타입입니다."
+    " 자동으로 매칭**하는 스마트 발권 시스템입니다."
 )
 st.markdown("---")
 
@@ -24,6 +27,7 @@ passenger_name = st.text_input("탑승객 성명", value="이준우")
 airline = st.text_input("편명 (Flight)", value="KE703 (ICN -> NRT)")
 
 t_id = "P01" if "P01" in terminal_id else "P03"
+
 
 # 제1여객터미널 출국장(1~6번) 게이트 코드를 OpenAPI 명세서 기준 한글 이름으로 매칭하는 함수
 def get_friendly_gate_name(gate_id):
@@ -42,6 +46,47 @@ def get_friendly_gate_name(gate_id):
       "DG6_E": "제6 출국장 (동측)",
   }
   return gate_map.get(gate_id, f"출국장 ({gate_id})")
+
+
+# 현재 한국 시각(KST) 기준 운영 중 여부 판별 함수
+def is_currently_open(operating_time):
+  if not operating_time or not isinstance(operating_time, str):
+    return False
+
+  cleaned = operating_time.strip().replace(" ", "")
+  if not cleaned or "미운영" in cleaned or "운영종료" in cleaned:
+    return False
+  if "24시간" in cleaned:
+    return True
+
+  sep = "~" if "~" in cleaned else ("-" if "-" in cleaned else None)
+  if not sep:
+    return False
+
+  try:
+    parts = cleaned.split(sep)
+    if len(parts) < 2:
+      return False
+
+    start_h, start_m = map(int, parts[0].split(":")[:2])
+    end_h, end_m = map(int, parts[1].split(":")[:2])
+
+    now_kst = datetime.now(ZoneInfo("Asia/Seoul"))
+    now_min = now_kst.hour * 60 + now_kst.minute
+    start_min = start_h * 60 + start_m
+    end_min = end_h * 60 + end_m
+
+    if end_min == 0:
+      end_min = 24 * 60
+
+    if start_min <= end_min:
+      return start_min <= now_min <= end_min
+    # 자정을 넘어가는 운영시간(예: 22:00~02:00) 처리
+    return now_min >= start_min or now_min <= end_min
+  except Exception:
+    # 예상치 못한 문자열 포맷일 경우 오판 방지를 위해 True 반환 후 데이터 표에서 확인 가능하게 함
+    return True
+
 
 if st.button("🚀 최적 보안검색대 배정 및 탑승권 발급"):
   # 제2여객터미널 선택 시 API 미제공 안내 예외 처리
@@ -67,7 +112,7 @@ if st.button("🚀 최적 보안검색대 배정 및 탑승권 발급"):
     with st.spinner(
         "인천공항 APOC 서버에서 실시간 출국장 데이터를 수집하고 있습니다..."
     ):
-      response = requests.get(url, params=params)
+      response = requests.get(url, params=params, timeout=10)
       data = response.json()
 
       response_obj = data.get("response", {})
@@ -100,14 +145,18 @@ if st.button("🚀 최적 보안검색대 배정 및 탑승권 발급"):
           try:
             raw_gate_id = str(item.get("gateId", "DG1_E"))
             friendly_name = get_friendly_gate_name(raw_gate_id)
+            operating_time = str(item.get("operatingTime", "") or "정보 없음")
+            is_open = is_currently_open(operating_time)
             wait_time = int(item.get("waitTime", 999))
             wait_length = int(item.get("waitLength", 999))
-            
+
             valid_items.append({
                 "검색대 위치": friendly_name,
-                "운영 시간": item.get("operatingTime"),
+                "운영 여부": "운영 중" if is_open else "미운영/확인필요",
+                "운영 시간": operating_time,
                 "예상 대기시간(분)": wait_time,
                 "대기 인원(명)": wait_length,
+                "_is_open": is_open,
             })
           except Exception:
             continue
@@ -118,9 +167,22 @@ if st.button("🚀 최적 보안검색대 배정 및 탑승권 발급"):
               f" 확인해주세요: {data}"
           )
         else:
-          best_gate = min(valid_items, key=lambda x: x["예상 대기시간(분)"])
+          open_items = [x for x in valid_items if x["_is_open"]]
+          target_pool = open_items if open_items else valid_items
+
+          # 1순위: 예상 대기시간(분), 2순위: 대기 인원(명)
+          best_gate = min(
+              target_pool,
+              key=lambda x: (x["예상 대기시간(분)"], x["대기 인원(명)"]),
+          )
 
           st.success("✅ 실시간 데이터 분석 및 동선 분산 매칭 완료!")
+
+          if not open_items:
+            st.info(
+                "ℹ️ 현재 시간대 운영 중으로 판별된 출국장이 없어 전체 조회"
+                " 데이터 기준으로 안내합니다."
+            )
 
           st.markdown("### 🎫 [Smart Boarding Pass & Gate Recommendation]")
           st.info(f"**승객 성명:** {passenger_name}  |  **편명:** {airline}")
@@ -147,7 +209,11 @@ if st.button("🚀 최적 보안검색대 배정 및 탑승권 발급"):
           )
 
           with st.expander("📊 실시간 전체 출국장 비교 데이터 확인하기"):
-            st.dataframe(valid_items)
+            display_items = [
+                {k: v for k, v in row.items() if not k.startswith("_")}
+                for row in valid_items
+            ]
+            st.dataframe(display_items)
 
   except Exception as e:
     st.error(f"오류가 발생했습니다: {e}")
