@@ -205,112 +205,73 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
           zone_display = zone_no.strip() if zone_no.strip() else "ZONE 1"
           seat_display = seat_no.strip() if seat_no.strip() else "-"
 
+          boarding_pass_html = f"""
+<div style="border: 1px solid #cbd5e1; border-radius: 14px; overflow: hidden; background: linear-gradient(135deg, #f8fafc 0%, #ffffff 55%, #eff6ff 100%); color: #0f172a; box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <div style="background: linear-gradient(90deg, #0f294a 0%, #1d4ed8 100%); color: #ffffff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center;">
+    <div style="font-weight: 800; letter-spacing: 0.8px; font-size: 15px;">{airline_name} &nbsp;|&nbsp; <span style="font-weight: 500; opacity: 0.9;">{flight_no}</span></div>
+    <div style="font-size: 12px; letter-spacing: 1.2px; font-weight: 700; opacity: 0.95;">BOARDING PASS · {terminal_short}</div>
+  </div>
+  <div style="display: flex; flex-wrap: wrap;">
+    <div style="flex: 2.3; min-width: 280px; padding: 18px 20px; border-right: 2px dashed #cbd5e1;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 14px;">
+        <div>
+          <div style="font-size: 10px; color: #64748b; font-weight: 700; letter-spacing: 0.6px;">PASSENGER NAME / 승객 성명</div>
+          <div style="font-size: 17px; font-weight: 800; color: #0f172a; margin-top: 2px;">{passenger_name}</div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 10px; color: #64748b; font-weight: 700; letter-spacing: 0.6px;">DATE / 탑승일</div>
+          <div style="font-size: 15px; font-weight: 700; color: #0f172a; margin-top: 2px;">{flight_date}</div>
+        </div>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; background: #f1f5f9; border-radius: 10px; padding: 10px 14px; margin-bottom: 16px;">
+        <div>
+          <div style="font-size: 10px; color: #64748b; font-weight: 700;">FROM</div>
+          <div style="font-size: 15px; font-weight: 800; color: #0f172a;">{origin_port}</div>
+        </div>
+        <div style="font-size: 16px; font-weight: 800; color: #2563eb;">✈ ──▶</div>
+        <div style="text-align: right;">
+          <div style="font-size: 10px; color: #64748b; font-weight: 700;">TO</div>
+          <div style="font-size: 15px; font-weight: 800; color: #0f172a;">{destination}</div>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px;">
+        <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; background: #ffffff;">
+          <div style="font-size: 10px; color: #64748b; font-weight: 700;">DEP TIME / 출발</div>
+          <div style="font-size: 20px; font-weight: 900; color: #0f172a; margin-top: 2px;">{departure_time}</div>
+        </div>
+        <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; background: #ffffff;">
+          <div style="font-size: 10px; color: #64748b; font-weight: 700;">BOARDING / 탑승</div>
+          <div style="font-size: 20px; font-weight: 900; color: #1d4ed8; margin-top: 2px;">{boarding_time}</div>
+        </div>
+        <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; background: #ffffff;">
+          <div style="font-size: 10px; color: #64748b; font-weight: 700;">GATE / 탑승구</div>
+          <div style="font-size: 20px; font-weight: 900; color: #0f172a; margin-top: 2px;">{gate_display}</div>
+        </div>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 12px; color: #334155; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+        <div><strong>CHECK-IN:</strong> {checkin_counter}</div>
+        <div><strong>TERMINAL:</strong> {terminal_short}</div>
+        <div><strong>SEAT:</strong> {seat_display}</div>
+      </div>
+    </div>
+    <div style="flex: 1; min-width: 190px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between; background: #f8fafc;">
+      <div>
+        <div style="display: inline-block; background: #dbeafe; color: #1e40af; font-weight: 800; font-size: 12px; padding: 4px 10px; border-radius: 999px; margin-bottom: 12px;">{zone_display}</div>
+        <div style="font-size: 10px; color: #64748b; font-weight: 700; letter-spacing: 0.5px;">RECOMMENDED SECURITY</div>
+        <div style="font-size: 15px; font-weight: 800; color: #0f766e; margin-top: 3px; line-height: 1.3;">{best_gate['검색대 위치']}</div>
+        <div style="font-size: 12px; color: #334155; margin-top: 6px;">예상 대기 <strong>{best_gate['예상 대기시간(분)']}분</strong> · 대기 <strong>{best_gate['대기 인원(명)']}명</strong></div>
+      </div>
+      <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #cbd5e1;">
+        <div style="height: 28px; background: repeating-linear-gradient(90deg, #0f172a 0px, #0f172a 2px, transparent 2px, transparent 4px, #0f172a 4px, #0f172a 5px, transparent 5px, transparent 8px); border-radius: 3px; opacity: 0.85;"></div>
+        <div style="font-size: 10px; color: #64748b; text-align: center; margin-top: 4px; letter-spacing: 1px;">{flight_no} · {flight_date}</div>
+      </div>
+    </div>
+  </div>
+</div>
+"""
+
           st.markdown("### BOARDING PASS / 탑승권")
-          st.markdown(
-              f"""
-              <div style="
-                  border: 1px solid #cbd5e1;
-                  border-radius: 14px;
-                  overflow: hidden;
-                  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 55%, #eff6ff 100%);
-                  color: #0f172a;
-                  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
-                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              ">
-                <!-- 상단 헤더 -->
-                <div style="
-                    background: linear-gradient(90deg, #0f294a 0%, #1d4ed8 100%);
-                    color: #ffffff;
-                    padding: 12px 20px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                ">
-                  <div style="font-weight: 800; letter-spacing: 0.8px; font-size: 15px;">
-                    {airline_name} &nbsp;|&nbsp; <span style="font-weight: 500; opacity: 0.9;">{flight_no}</span>
-                  </div>
-                  <div style="font-size: 12px; letter-spacing: 1.2px; font-weight: 700; opacity: 0.95;">
-                    BOARDING PASS · {terminal_short}
-                  </div>
-                </div>
-
-                <!-- 본문: 좌측 메인 탑승권 + 우측 스텁 -->
-                <div style="display: flex; flex-wrap: wrap;">
-                  <!-- 좌측 메인 영역 -->
-                  <div style="flex: 2.3; min-width: 280px; padding: 18px 20px; border-right: 2px dashed #cbd5e1;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 14px;">
-                      <div>
-                        <div style="font-size: 10px; color: #64748b; font-weight: 700; letter-spacing: 0.6px;">PASSENGER NAME / 승객 성명</div>
-                        <div style="font-size: 17px; font-weight: 800; color: #0f172a; margin-top: 2px;">{passenger_name}</div>
-                      </div>
-                      <div style="text-align: right;">
-                        <div style="font-size: 10px; color: #64748b; font-weight: 700; letter-spacing: 0.6px;">DATE / 탑승일</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #0f172a; margin-top: 2px;">{flight_date}</div>
-                      </div>
-                    </div>
-
-                    <div style="display: flex; justify-content: space-between; align-items: center; background: #f1f5f9; border-radius: 10px; padding: 10px 14px; margin-bottom: 16px;">
-                      <div>
-                        <div style="font-size: 10px; color: #64748b; font-weight: 700;">FROM</div>
-                        <div style="font-size: 15px; font-weight: 800; color: #0f172a;">{origin_port}</div>
-                      </div>
-                      <div style="font-size: 16px; font-weight: 800; color: #2563eb;">✈ ──▶</div>
-                      <div style="text-align: right;">
-                        <div style="font-size: 10px; color: #64748b; font-weight: 700;">TO</div>
-                        <div style="font-size: 15px; font-weight: 800; color: #0f172a;">{destination}</div>
-                      </div>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px;">
-                      <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; background: #ffffff;">
-                        <div style="font-size: 10px; color: #64748b; font-weight: 700;">DEP TIME / 출발</div>
-                        <div style="font-size: 20px; font-weight: 900; color: #0f172a; margin-top: 2px;">{departure_time}</div>
-                      </div>
-                      <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; background: #ffffff;">
-                        <div style="font-size: 10px; color: #64748b; font-weight: 700;">BOARDING / 탑승</div>
-                        <div style="font-size: 20px; font-weight: 900; color: #1d4ed8; margin-top: 2px;">{boarding_time}</div>
-                      </div>
-                      <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; background: #ffffff;">
-                        <div style="font-size: 10px; color: #64748b; font-weight: 700;">GATE / 탑승구</div>
-                        <div style="font-size: 20px; font-weight: 900; color: #0f172a; margin-top: 2px;">{gate_display}</div>
-                      </div>
-                    </div>
-
-                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #334155; padding-top: 8px; border-top: 1px solid #e2e8f0;">
-                      <div><strong>CHECK-IN:</strong> {checkin_counter}</div>
-                      <div><strong>TERMINAL:</strong> {terminal_short}</div>
-                      <div><strong>SEAT:</strong> {seat_display}</div>
-                    </div>
-                  </div>
-
-                  <!-- 우측 스텁 + 권장 보안검색대 -->
-                  <div style="flex: 1; min-width: 190px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between; background: #f8fafc;">
-                    <div>
-                      <div style="display: inline-block; background: #dbeafe; color: #1e40af; font-weight: 800; font-size: 12px; padding: 4px 10px; border-radius: 999px; margin-bottom: 12px;">
-                        {zone_display}
-                      </div>
-
-                      <div style="font-size: 10px; color: #64748b; font-weight: 700; letter-spacing: 0.5px;">RECOMMENDED SECURITY</div>
-                      <div style="font-size: 15px; font-weight: 800; color: #0f766e; margin-top: 3px; line-height: 1.3;">
-                        {best_gate['검색대 위치']}
-                      </div>
-                      <div style="font-size: 12px; color: #334155; margin-top: 6px;">
-                        예상 대기 <strong>{best_gate['예상 대기시간(분)']}분</strong> · 대기 <strong>{best_gate['대기 인원(명)']}명</strong>
-                      </div>
-                    </div>
-
-                    <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #cbd5e1;">
-                      <div style="height: 28px; background: repeating-linear-gradient(90deg, #0f172a 0px, #0f172a 2px, transparent 2px, transparent 4px, #0f172a 4px, #0f172a 5px, transparent 5px, transparent 8px); border-radius: 3px; opacity: 0.85;"></div>
-                      <div style="font-size: 10px; color: #64748b; text-align: center; margin-top: 4px; letter-spacing: 1px;">
-                        {flight_no} · {flight_date}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              """,
-              unsafe_allow_html=True,
-          )
+          st.markdown(boarding_pass_html, unsafe_allow_html=True)
 
           st.markdown("")
           col1, col2 = st.columns(2)
