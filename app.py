@@ -20,7 +20,7 @@ st.markdown("---")
 
 SERVICE_KEY = "ddaabc379ff683cc00174904ea4b4c1e945a8a951a12f886ecded9fe791c9c16"
 BASE_URL = "https://apis.data.go.kr/B551177/statusOfDepartureCongestion"
-FLOORPLAN_PATH = "assets/t1_floorplan.jpg"
+FLOORPLAN_PATH = "t1_floorplan.jpg"
 
 st.subheader("시스템 설정 및 승객 정보")
 terminal_id = st.selectbox(
