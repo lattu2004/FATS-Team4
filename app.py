@@ -11,8 +11,9 @@ st.set_page_config(
 
 st.title("인천공항 TAM 기반 스마트 보안검색대 추천 시스템")
 st.markdown(
-    "실시간 출국장 혼잡도 API 데이터를 바탕으로 **가장 여유로운 보안검색대를"
-    " 안내**하는 스마트 발권 화면입니다."
+    "인천국제공항공사 공식 OpenAPI(`getDepartureCongestion`)로 수집한"
+    " 실시간 APOC 출국장 혼잡도 데이터를 바탕으로 **가장 여유로운"
+    " 보안검색대를 안내**하는 스마트 발권 화면입니다."
 )
 st.markdown("---")
 
@@ -127,8 +128,15 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
   }
 
   try:
-    with st.spinner("실시간 출국장 혼잡도 데이터를 불러오는 중입니다..."):
+    fetched_at = datetime.now(ZoneInfo("Asia/Seoul")).strftime(
+        "%Y-%m-%d %H:%M:%S KST"
+    )
+    with st.spinner(
+        "인천공항 APOC 연동 OpenAPI(getDepartureCongestion)에서 실시간"
+        " 출국장 데이터를 수집하는 중입니다..."
+    ):
       response = requests.get(url, params=params, timeout=10)
+      status_code = response.status_code
       data = response.json()
 
       response_obj = data.get("response", {})
@@ -205,6 +213,16 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
           zone_display = zone_no.strip() if zone_no.strip() else "ZONE 1"
           seat_display = seat_no.strip() if seat_no.strip() else "-"
 
+          st.markdown("### BOARDING PASS / 탑승권")
+
+          source_badge_html = f"""
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 12px; color: #1e3a8a;">
+  <div><strong>데이터 출처:</strong> 인천국제공항공사 OpenAPI (<code>getDepartureCongestion</code> · APOC 실시간 연동)</div>
+  <div style="font-weight: 600; color: #1d4ed8;">조회 기준 시각: {fetched_at}</div>
+</div>
+"""
+          st.markdown(source_badge_html, unsafe_allow_html=True)
+
           boarding_pass_html = f"""
 <div style="border: 1px solid #cbd5e1; border-radius: 14px; overflow: hidden; background: linear-gradient(135deg, #f8fafc 0%, #ffffff 55%, #eff6ff 100%); color: #0f172a; box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
   <div style="background: linear-gradient(90deg, #0f294a 0%, #1d4ed8 100%); color: #ffffff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center;">
@@ -270,7 +288,6 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
 </div>
 """
 
-          st.markdown("### BOARDING PASS / 탑승권")
           st.markdown(boarding_pass_html, unsafe_allow_html=True)
 
           st.markdown("")
@@ -300,6 +317,18 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
                 for row in valid_items
             ]
             st.dataframe(display_items)
+
+          with st.expander("API 연동 및 소스 응답 확인"):
+            st.markdown(
+                f"- **데이터 출처:** 인천국제공항공사 OpenAPI"
+                f" (`getDepartureCongestion` · APOC 실시간 연동)\n"
+                f"- **조회 기준 시각:** `{fetched_at}`\n"
+                f"- **요청 엔드포인트:** `{url}`\n"
+                f"- **요청 파라미터:** `terminalId={api_terminal_id}`,"
+                f" `type=json`, `numOfRows=20`, `pageNo=1`\n"
+                f"- **HTTP 응답 상태:** `{status_code}`"
+            )
+            st.json(items)
 
   except Exception as e:
     st.error(f"오류가 발생했습니다: {e}")
