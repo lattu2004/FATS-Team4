@@ -121,27 +121,36 @@ def render_map_pin(gate_id, gate_lookup, recommended_id, top_pct, left_pct):
   side = "서" if gate_id.endswith("_W") else "동"
 
   if not info or not info["_is_open"]:
-    bg = "rgba(100, 116, 139, 0.92)"
-    border = "1px solid #cbd5e1"
-    label = f"{side} · 미운영"
+    bg = "rgba(100, 116, 139, 0.86)"
+    border = "1px solid #e2e8f0"
+    line1 = f"{side}·미운영"
+    line2 = ""
   else:
     wait_m = info["예상 대기시간(분)"]
     wait_p = info["대기 인원(명)"]
-    bg = "rgba(5, 150, 105, 0.95)" if is_rec else "rgba(15, 41, 74, 0.90)"
-    border = "2px solid #fde047" if is_rec else "1px solid #93c5fd"
-    rec_tag = "★추천 " if is_rec else ""
-    label = f"{rec_tag}{side} {wait_m}분({wait_p}명)"
+    bg = "rgba(5, 150, 105, 0.92)" if is_rec else "rgba(15, 41, 74, 0.86)"
+    border = "1.5px solid #fde047" if is_rec else "1px solid #93c5fd"
+    rec_tag = "★" if is_rec else ""
+    line1 = f"{rec_tag}{side} {wait_m}분"
+    line2 = f"{wait_p}명"
+
+  sub_html = (
+      f'<div style="font-size:8px; line-height:1.1; opacity:0.95;">{line2}</div>'
+      if line2
+      else ""
+  )
 
   return (
       f'<div style="position:absolute; top:{top_pct}%; left:{left_pct}%;'
       " transform:translate(-50%, -50%);"
       f" background:{bg}; border:{border}; color:#ffffff;"
-      " padding:3px 6px; border-radius:6px; font-size:10px; font-weight:700;"
-      " white-space:nowrap; box-shadow:0 2px 6px rgba(0,0,0,0.25);"
-      ' z-index:2;">'
-      f"{label}"
+      " padding:2px 4px; border-radius:4px; font-size:8.5px; font-weight:700;"
+      " line-height:1.15; text-align:center; white-space:nowrap;"
+      ' box-shadow:0 1px 4px rgba(0,0,0,0.22); z-index:2;">'
+      f"<div>{line1}</div>{sub_html}"
       "</div>"
   )
+
 
 
 def render_gate_cell(gate_id, gate_lookup, recommended_id):
@@ -416,19 +425,20 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
           img_b64 = get_base64_image(FLOORPLAN_PATH)
 
           gate_coords = {
-              "DG1_W": (54, 91),
-              "DG1_E": (54, 96),
-              "DG2_W": (42, 81),
-              "DG2_E": (42, 86),
-              "DG3_W": (33, 66),
-              "DG3_E": (33, 71),
-              "DG4_W": (33, 35),
-              "DG4_E": (33, 40),
-              "DG5_W": (42, 20),
-              "DG5_E": (42, 25),
-              "DG6_W": (54, 7),
-              "DG6_E": (54, 12),
-          }
+    "DG1_W": (46, 91.5),
+    "DG1_E": (46, 96.5),
+    "DG2_W": (33, 81.5),
+    "DG2_E": (33, 86.5),
+    "DG3_W": (22, 65.5),
+    "DG3_E": (22, 70.5),
+    "DG4_W": (22, 34.5),
+    "DG4_E": (22, 39.5),
+    "DG5_W": (33, 18.5),
+    "DG5_E": (33, 23.5),
+    "DG6_W": (46, 5.5),
+    "DG6_E": (46, 10.5),
+}
+
 
           if img_b64:
             pins_html = "".join(
