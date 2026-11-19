@@ -50,22 +50,37 @@ with col_d3:
 t_id = "P01" if "P01" in terminal_id else "T2"
 api_terminal_id = "P01" if "P01" in terminal_id else "P03"
 
+GATE_ORDER = [
+    "DG1_W",
+    "DG1_E",
+    "DG2_W",
+    "DG2_E",
+    "DG3_W",
+    "DG3_E",
+    "DG4_W",
+    "DG4_E",
+    "DG5_W",
+    "DG5_E",
+    "DG6_W",
+    "DG6_E",
+]
+
 
 # 제1여객터미널 출국장(1~6번) 게이트 코드를 OpenAPI 명세서 기준 한글 이름으로 매칭하는 함수
 def get_friendly_gate_name(gate_id):
   gate_map = {
-      "DG1_W": "제1 출국장 (서측)",
-      "DG1_E": "제1 출국장 (동측)",
-      "DG2_W": "제2 출국장 (서측)",
-      "DG2_E": "제2 출국장 (동측 / 스마트패스 전용레인)",
-      "DG3_W": "제3 출국장 (서측)",
-      "DG3_E": "제3 출국장 (동측)",
-      "DG4_W": "제4 출국장 (서측)",
-      "DG4_E": "제4 출국장 (동측)",
-      "DG5_W": "제5 출국장 (서측)",
-      "DG5_E": "제5 출국장 (동측)",
-      "DG6_W": "제6 출국장 (서측)",
-      "DG6_E": "제6 출국장 (동측)",
+      "DG1_W": "제1 출국장 (서편)",
+      "DG1_E": "제1 출국장 (동편)",
+      "DG2_W": "제2 출국장 (서편)",
+      "DG2_E": "제2 출국장 (동편)",
+      "DG3_W": "제3 출국장 (서편)",
+      "DG3_E": "제3 출국장 (동편)",
+      "DG4_W": "제4 출국장 (서편)",
+      "DG4_E": "제4 출국장 (동편)",
+      "DG5_W": "제5 출국장 (서편)",
+      "DG5_E": "제5 출국장 (동편)",
+      "DG6_W": "제6 출국장 (서편)",
+      "DG6_E": "제6 출국장 (동편)",
   }
   return gate_map.get(gate_id, f"출국장 ({gate_id})")
 
@@ -106,6 +121,61 @@ def is_currently_open(operating_time):
     return now_min >= start_min or now_min <= end_min
   except Exception:
     return True
+
+
+def render_gate_cell(gate_id, gate_lookup, recommended_id):
+  info = gate_lookup.get(gate_id)
+  is_rec = gate_id == recommended_id
+
+  if not info:
+    bg = "#f1f5f9"
+    border = "1px solid #cbd5e1"
+    status_text = "정보 없음"
+    sub_text = "-"
+    title_color = "#475569"
+  elif not info["_is_open"]:
+    bg = "#f1f5f9"
+    border = "1px solid #cbd5e1"
+    status_text = "미운영"
+    sub_text = info["운영 시간"]
+    title_color = "#64748b"
+  else:
+    wait_m = info["예상 대기시간(분)"]
+    wait_p = info["대기 인원(명)"]
+    if is_rec:
+      bg = "#ecfdf5"
+      border = "2px solid #059669"
+      title_color = "#065f46"
+    elif wait_m <= 10:
+      bg = "#eff6ff"
+      border = "1px solid #93c5fd"
+      title_color = "#1e40af"
+    elif wait_m <= 20:
+      bg = "#fffbeb"
+      border = "1px solid #fcd34d"
+      title_color = "#92400e"
+    else:
+      bg = "#fef2f2"
+      border = "1px solid #fca5a5"
+      title_color = "#991b1b"
+    status_text = f"{wait_m}분 · {wait_p}명"
+    sub_text = "권장 출국장" if is_rec else "운영 중"
+
+  side_label = "서편" if gate_id.endswith("_W") else "동편"
+  badge_html = (
+      '<div style="font-size:9px; font-weight:800; color:#ffffff; background:#059669; border-radius:4px; padding:1px 4px; display:inline-block; margin-bottom:2px;">추천</div>'
+      if is_rec
+      else ""
+  )
+
+  return (
+      f'<div style="background:{bg}; border:{border}; border-radius:8px; padding:6px 4px; text-align:center; min-width:0;">'
+      f"{badge_html}"
+      f'<div style="font-size:10px; font-weight:700; color:{title_color};">{side_label}</div>'
+      f'<div style="font-size:12px; font-weight:800; color:#0f172a; margin-top:1px;">{status_text}</div>'
+      f'<div style="font-size:9px; color:#475569; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{sub_text}</div>'
+      f"</div>"
+  )
 
 
 if st.button("최적 보안검색대 배정 및 탑승권 발급"):
@@ -165,23 +235,29 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
         )
       else:
         valid_items = []
+        gate_lookup = {}
         for item in items:
           try:
-            raw_gate_id = str(item.get("gateId", "DG1_E"))
+            raw_gate_id = str(item.get("gateId", "")).strip()
+            if not raw_gate_id:
+              continue
             friendly_name = get_friendly_gate_name(raw_gate_id)
             operating_time = str(item.get("operatingTime", "") or "정보 없음")
             is_open = is_currently_open(operating_time)
             wait_time = int(item.get("waitTime", 999))
             wait_length = int(item.get("waitLength", 999))
 
-            valid_items.append({
+            row_data = {
+                "_gate_id": raw_gate_id,
                 "검색대 위치": friendly_name,
-                "운영 여부": "운영 중" if is_open else "미운영/확인필요",
+                "운영 여부": "운영 중" if is_open else "미운영",
                 "운영 시간": operating_time,
                 "예상 대기시간(분)": wait_time,
                 "대기 인원(명)": wait_length,
                 "_is_open": is_open,
-            })
+            }
+            valid_items.append(row_data)
+            gate_lookup[raw_gate_id] = row_data
           except Exception:
             continue
 
@@ -197,6 +273,7 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
               target_pool,
               key=lambda x: (x["예상 대기시간(분)"], x["대기 인원(명)"]),
           )
+          recommended_id = best_gate["_gate_id"]
 
           st.success("실시간 혼잡도 분석 및 추천 출국장 매칭이 완료되었습니다.")
 
@@ -311,6 +388,39 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
               f" (운영시간: {best_gate['운영 시간']}) 이용을 권장합니다."
           )
 
+          # 제1여객터미널 1~6번 출국장 위치별 실시간 현황 보드
+          st.markdown("### 제1여객터미널 출국장 위치별 실시간 현황")
+          gate_blocks_html = []
+          for g_num in range(1, 7):
+            w_id = f"DG{g_num}_W"
+            e_id = f"DG{g_num}_E"
+            w_cell = render_gate_cell(w_id, gate_lookup, recommended_id)
+            e_cell = render_gate_cell(e_id, gate_lookup, recommended_id)
+            gate_blocks_html.append(
+                f'<div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:8px;">'
+                f'<div style="text-align:center; font-size:12px; font-weight:800; color:#0f294a; margin-bottom:6px;">{g_num}번 출국장</div>'
+                f'<div style="display:grid; grid-template-columns:1fr 1fr; gap:5px;">{w_cell}{e_cell}</div>'
+                f"</div>"
+            )
+
+          concourse_map_html = (
+              '<div style="border:1px solid #cbd5e1; border-radius:14px; padding:16px; background:linear-gradient(180deg, #f1f5f9 0%, #f8fafc 100%); color:#0f172a; font-family:-apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif;">'
+              '<div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; margin-bottom:12px;">'
+              '<div style="font-size:13px; font-weight:800; color:#0f294a;">3층 출발장 출국장(1~6번 · 서편/동편) 및 체크인(A~N) 구역 안내</div>'
+              '<div style="font-size:11px; color:#475569;">표시 형식: <strong>예상 대기시간 · 대기인원</strong> (미운영 시 <strong>미운영</strong>)</div>'
+              "</div>"
+              '<div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:14px;">'
+              + "".join(gate_blocks_html)
+              + "</div>"
+              '<div style="background:#e2e8f0; border-radius:999px; padding:8px 14px; display:flex; justify-content:space-between; align-items:center; font-size:11px; font-weight:700; color:#334155;">'
+              "<span>N · M · L · K · J · H</span>"
+              '<span style="color:#0f294a;">체크인 카운터 라인 (A ~ N)</span>'
+              "<span>G · F · E · D · C · B · A</span>"
+              "</div>"
+              "</div>"
+          )
+          st.markdown(concourse_map_html, unsafe_allow_html=True)
+
           with st.expander("실시간 전체 출국장 비교 데이터 보기"):
             display_items = [
                 {k: v for k, v in row.items() if not k.startswith("_")}
@@ -318,7 +428,7 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
             ]
             st.dataframe(display_items)
 
-          with st.expander("API 연동 및 소스 응답 확인"):
+          with st.expander("API 연동 및 원천 응답 확인"):
             st.markdown(
                 f"- **데이터 출처:** 인천국제공항공사 OpenAPI"
                 f" (`getDepartureCongestion` · APOC 실시간 연동)\n"
