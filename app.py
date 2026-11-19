@@ -9,24 +9,35 @@ st.set_page_config(
     page_title="인천공항 스마트 보안검색대 추천 시스템", layout="centered"
 )
 
-st.title("✈️ 인천공항 TAM 기반 스마트 보안검색대 추천 시스템")
+st.title("인천공항 TAM 기반 스마트 보안검색대 추천 시스템")
 st.markdown(
-    "실시간 출국장 혼잡도 API 데이터를 분석하여 **가장 쾌적한 보안검색대를"
-    " 자동으로 매칭**하는 스마트 발권 시스템입니다."
+    "실시간 출국장 혼잡도 API 데이터를 바탕으로 **가장 여유로운 보안검색대를"
+    " 안내**하는 스마트 발권 화면입니다."
 )
 st.markdown("---")
 
 SERVICE_KEY = "ddaabc379ff683cc00174904ea4b4c1e945a8a951a12f886ecded9fe791c9c16"
 BASE_URL = "https://apis.data.go.kr/B551177/statusOfDepartureCongestion"
 
-st.subheader("🔑 시스템 설정 및 승객 정보")
+st.subheader("시스템 설정 및 승객 정보")
 terminal_id = st.selectbox(
     "터미널 선택", ["P01 (제1여객터미널)", "P03 (제2여객터미널)"]
 )
-passenger_name = st.text_input("탑승객 성명", value="이준우")
-airline = st.text_input("편명 (Flight)", value="KE703 (ICN -> NRT)")
 
-t_id = "P01" if "P01" in terminal_id else "P03"
+col_p1, col_p2 = st.columns(2)
+with col_p1:
+  passenger_name = st.text_input("탑승객 성명", value="이준우")
+  flight_no = st.text_input("운항편명", value="TW245")
+  departure_time = st.text_input("출발시간", value="15:30")
+with col_p2:
+  airline_name = st.text_input("항공사", value="트리니티항공")
+  destination = st.text_input("목적지", value="도쿄/나리타 (NRT)")
+  checkin_counter = st.text_input("체크인 카운터", value="A01-C34")
+
+boarding_gate = st.text_input("탑승구 (미정 시 공란 가능)", value="")
+
+t_id = "P01" if "P01" in terminal_id else "T2"
+api_terminal_id = "P01" if "P01" in terminal_id else "P03"
 
 
 # 제1여객터미널 출국장(1~6번) 게이트 코드를 OpenAPI 명세서 기준 한글 이름으로 매칭하는 함수
@@ -88,13 +99,13 @@ def is_currently_open(operating_time):
     return True
 
 
-if st.button("🚀 최적 보안검색대 배정 및 탑승권 발급"):
+if st.button("최적 보안검색대 배정 및 탑승권 발급"):
   # 제2여객터미널 선택 시 API 미제공 안내 예외 처리
-  if t_id == "P03":
+  if api_terminal_id == "P03":
     st.warning(
-        "⚠️ 현재 인천국제공항공사 OpenAPI(V1.1) 정책상 제2여객터미널(P03)의"
-        " 출국장 혼잡도 데이터는 '향후 제공 예정'입니다. 제1여객터미널(P01)을"
-        " 선택해 시연해 주세요."
+        "현재 인천국제공항공사 OpenAPI(V1.1) 기준 제2여객터미널(P03) 출국장"
+        " 혼잡도 데이터는 미제공(향후 제공 예정) 상태입니다. 제1여객터미널(P01)을"
+        " 선택해 주세요."
     )
     st.stop()
 
@@ -104,14 +115,12 @@ if st.button("🚀 최적 보안검색대 배정 및 탑승권 발급"):
       "serviceKey": SERVICE_KEY,
       "numOfRows": "20",
       "pageNo": "1",
-      "terminalId": t_id,
+      "terminalId": api_terminal_id,
       "type": "json",
   }
 
   try:
-    with st.spinner(
-        "인천공항 APOC 서버에서 실시간 출국장 데이터를 수집하고 있습니다..."
-    ):
+    with st.spinner("실시간 출국장 혼잡도 데이터를 불러오는 중입니다..."):
       response = requests.get(url, params=params, timeout=10)
       data = response.json()
 
@@ -136,8 +145,8 @@ if st.button("🚀 최적 보안검색대 배정 및 탑승권 발급"):
 
       if not items:
         st.error(
-            "❌ 데이터를 불러오지 못했습니다. API 트래픽 초과 여부나 인증키"
-            " 상태를 확인해주세요."
+            "데이터를 불러오지 못했습니다. API 트래픽 한도나 인증키 상태를"
+            " 확인해 주세요."
         )
       else:
         valid_items = []
@@ -163,8 +172,7 @@ if st.button("🚀 최적 보안검색대 배정 및 탑승권 발급"):
 
         if not valid_items:
           st.warning(
-              "⚠️ 유효한 게이트 데이터를 추출하지 못했습니다. 응답 데이터를"
-              f" 확인해주세요: {data}"
+              f"유효한 출국장 데이터를 추출하지 못했습니다. 응답 확인: {data}"
           )
         else:
           open_items = [x for x in valid_items if x["_is_open"]]
@@ -176,39 +184,86 @@ if st.button("🚀 최적 보안검색대 배정 및 탑승권 발급"):
               key=lambda x: (x["예상 대기시간(분)"], x["대기 인원(명)"]),
           )
 
-          st.success("✅ 실시간 데이터 분석 및 동선 분산 매칭 완료!")
+          st.success("실시간 혼잡도 분석 및 추천 출국장 매칭이 완료되었습니다.")
 
           if not open_items:
             st.info(
-                "ℹ️ 현재 시간대 운영 중으로 판별된 출국장이 없어 전체 조회"
+                "현재 시간대 운영 중으로 확인된 출국장이 없어 전체 조회"
                 " 데이터 기준으로 안내합니다."
             )
 
-          st.markdown("### 🎫 [Smart Boarding Pass & Gate Recommendation]")
-          st.info(f"**승객 성명:** {passenger_name}  |  **편명:** {airline}")
+          terminal_short = "T1" if t_id == "P01" else "T2"
+          gate_display = (
+              boarding_gate.strip() if boarding_gate.strip() else "미정"
+          )
 
+          st.markdown("### BOARDING PASS")
+          st.markdown(
+              f"""
+              <div style="border:1px solid #d0d7de; border-radius:12px; padding:20px; background-color:#ffffff; color:#111827;">
+                <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:12px; margin-bottom:16px;">
+                  <div>
+                    <div style="font-size:12px; color:#64748b;">PASSENGER</div>
+                    <div style="font-size:18px; font-weight:700;">{passenger_name}</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div style="font-size:12px; color:#64748b;">DEPARTURE</div>
+                    <div style="font-size:18px; font-weight:700;">{departure_time}</div>
+                  </div>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:14px; margin-bottom:16px;">
+                  <div>
+                    <div style="font-size:12px; color:#64748b;">목적지</div>
+                    <div style="font-size:15px; font-weight:600;">{destination}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:12px; color:#64748b;">운항편명 / 항공사</div>
+                    <div style="font-size:15px; font-weight:600;">{flight_no} / {airline_name}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:12px; color:#64748b;">터미널</div>
+                    <div style="font-size:15px; font-weight:600;">{terminal_short}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:12px; color:#64748b;">체크인 카운터</div>
+                    <div style="font-size:15px; font-weight:600;">{checkin_counter}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:12px; color:#64748b;">탑승구</div>
+                    <div style="font-size:15px; font-weight:600;">{gate_display}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:12px; color:#64748b;">권장 보안검색대</div>
+                    <div style="font-size:15px; font-weight:700; color:#0f766e;">{best_gate['검색대 위치']}</div>
+                  </div>
+                </div>
+              </div>
+              """,
+              unsafe_allow_html=True,
+          )
+
+          st.markdown("")
           col1, col2 = st.columns(2)
           with col1:
             st.metric(
-                label="🎯 추천 보안검색대",
+                label="권장 보안검색대",
                 value=f"{best_gate['검색대 위치']}",
                 delta=f"예상 대기 {best_gate['예상 대기시간(분)']}분",
                 delta_color="normal",
             )
           with col2:
             st.metric(
-                label="👥 현재 대기 인원",
+                label="현재 대기 인원",
                 value=f"{best_gate['대기 인원(명)']}명",
-                delta="가장 원활함",
+                delta="기준 최단 대기",
             )
 
           st.warning(
-              f"📌 **시스템 가이드:** 중앙부 쏠림 현상을 방지하기 위해, 고객님께서는"
-              f" 현재 가장 여유로운 **{best_gate['검색대 위치']}** (운영시간:"
-              f" {best_gate['운영 시간']})로 이동하여 주시기 바랍니다."
+              f"**안내:** 출국장 혼잡 완화를 위해 **{best_gate['검색대 위치']}**"
+              f" (운영시간: {best_gate['운영 시간']}) 이용을 권장합니다."
           )
 
-          with st.expander("📊 실시간 전체 출국장 비교 데이터 확인하기"):
+          with st.expander("실시간 전체 출국장 비교 데이터 보기"):
             display_items = [
                 {k: v for k, v in row.items() if not k.startswith("_")}
                 for row in valid_items
