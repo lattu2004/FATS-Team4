@@ -7,14 +7,14 @@ import requests
 import streamlit as st
 
 st.set_page_config(
-    page_title="인천공항 스마트 보안검색대 추천 시스템", layout="centered"
+    page_title="인천공항 출국장 혼잡도 기반 보안검색 안내 시스템", layout="centered"
 )
 
-st.title("인천공항 TAM 기반 스마트 보안검색대 추천 시스템")
+st.title("인천공항 TAM 기반 출국장 혼잡도·보안검색 안내 시스템")
 st.markdown(
     "인천국제공항공사 공식 OpenAPI(`getDepartureCongestion`)로 수집한"
-    " 실시간 APOC 출국장 혼잡도 데이터를 바탕으로 **가장 여유로운"
-    " 보안검색대를 안내**하는 스마트 발권 화면입니다."
+    " 실시간 APOC **출국장 혼잡도** 데이터를 바탕으로 **가장 여유로운"
+    " 출국장(보안검색 구역)**을 안내하는 스마트 발권 화면입니다."
 )
 st.markdown("---")
 
@@ -152,7 +152,6 @@ def render_map_pin(gate_id, gate_lookup, recommended_id, top_pct, left_pct):
   )
 
 
-
 def render_gate_cell(gate_id, gate_lookup, recommended_id):
   info = gate_lookup.get(gate_id)
   is_rec = gate_id == recommended_id
@@ -211,7 +210,7 @@ def render_gate_cell(gate_id, gate_lookup, recommended_id):
   )
 
 
-if st.button("최적 보안검색대 배정 및 탑승권 발급"):
+if st.button("출국장 혼잡도 조회 및 탑승권 발급"):
   if api_terminal_id == "P03":
     st.warning(
         "현재 인천국제공항공사 OpenAPI(V1.1) 기준 제2여객터미널(P03) 출국장"
@@ -236,7 +235,7 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
     )
     with st.spinner(
         "인천공항 APOC 연동 OpenAPI(getDepartureCongestion)에서 실시간"
-        " 출국장 데이터를 수집하는 중입니다..."
+        " 출국장 혼잡도 데이터를 수집하는 중입니다..."
     ):
       response = requests.get(url, params=params, timeout=10)
       status_code = response.status_code
@@ -263,8 +262,8 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
 
       if not items:
         st.error(
-            "데이터를 불러오지 못했습니다. API 트래픽 한도나 인증키 상태를"
-            " 확인해 주세요."
+            "출국장 혼잡도 데이터를 불러오지 못했습니다. API 트래픽 한도나"
+            " 인증키 상태를 확인해 주세요."
         )
       else:
         valid_items = []
@@ -282,7 +281,7 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
 
             row_data = {
                 "_gate_id": raw_gate_id,
-                "검색대 위치": friendly_name,
+                "출국장 구분": friendly_name,
                 "운영 여부": "운영 중" if is_open else "미운영",
                 "운영 시간": operating_time,
                 "예상 대기시간(분)": wait_time,
@@ -296,7 +295,8 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
 
         if not valid_items:
           st.warning(
-              f"유효한 출국장 데이터를 추출하지 못했습니다. 응답 확인: {data}"
+              f"유효한 출국장 혼잡도 데이터를 추출하지 못했습니다. 응답 확인:"
+              f" {data}"
           )
         else:
           open_items = [x for x in valid_items if x["_is_open"]]
@@ -308,12 +308,14 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
           )
           recommended_id = best_gate["_gate_id"]
 
-          st.success("실시간 혼잡도 분석 및 추천 출국장 매칭이 완료되었습니다.")
+          st.success(
+              "실시간 출국장 혼잡도 분석 및 권장 출국장 매칭이 완료되었습니다."
+          )
 
           if not open_items:
             st.info(
                 "현재 시간대 운영 중으로 확인된 출국장이 없어 전체 조회"
-                " 데이터 기준으로 안내합니다."
+                " 출국장 데이터 기준으로 안내합니다."
             )
 
           terminal_short = "T1" if t_id == "P01" else "T2"
@@ -327,7 +329,7 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
 
           source_badge_html = f"""
 <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 12px; color: #1e3a8a;">
-  <div><strong>데이터 출처:</strong> 인천국제공항공사 OpenAPI (<code>getDepartureCongestion</code> · APOC 실시간 연동)</div>
+  <div><strong>데이터 출처:</strong> 인천국제공항공사 OpenAPI (<code>getDepartureCongestion</code> · APOC 출국장 혼잡도 연동)</div>
   <div style="font-weight: 600; color: #1d4ed8;">조회 기준 시각: {fetched_at}</div>
 </div>
 """
@@ -385,8 +387,8 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
     <div style="flex: 1; min-width: 190px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between; background: #f8fafc;">
       <div>
         <div style="display: inline-block; background: #dbeafe; color: #1e40af; font-weight: 800; font-size: 12px; padding: 4px 10px; border-radius: 999px; margin-bottom: 12px;">{zone_display}</div>
-        <div style="font-size: 10px; color: #64748b; font-weight: 700; letter-spacing: 0.5px;">RECOMMENDED SECURITY</div>
-        <div style="font-size: 15px; font-weight: 800; color: #0f766e; margin-top: 3px; line-height: 1.3;">{best_gate['검색대 위치']}</div>
+        <div style="font-size: 10px; color: #64748b; font-weight: 700; letter-spacing: 0.5px;">RECOMMENDED DEPARTURE GATE</div>
+        <div style="font-size: 15px; font-weight: 800; color: #0f766e; margin-top: 3px; line-height: 1.3;">{best_gate['출국장 구분']}</div>
         <div style="font-size: 12px; color: #334155; margin-top: 6px;">예상 대기 <strong>{best_gate['예상 대기시간(분)']}분</strong> · 대기 <strong>{best_gate['대기 인원(명)']}명</strong></div>
       </div>
       <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #cbd5e1;">
@@ -404,8 +406,8 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
           col1, col2 = st.columns(2)
           with col1:
             st.metric(
-                label="권장 보안검색대",
-                value=f"{best_gate['검색대 위치']}",
+                label="권장 출국장(보안검색 안내)",
+                value=f"{best_gate['출국장 구분']}",
                 delta=f"예상 대기 {best_gate['예상 대기시간(분)']}분",
                 delta_color="normal",
             )
@@ -417,28 +419,28 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
             )
 
           st.warning(
-              f"**안내:** 출국장 혼잡 완화를 위해 **{best_gate['검색대 위치']}**"
-              f" (운영시간: {best_gate['운영 시간']}) 이용을 권장합니다."
+              f"**안내:** 출국장 혼잡 완화를 위해 **{best_gate['출국장 구분']}**"
+              f" (운영시간: {best_gate['운영 시간']}) 보안검색 구역 이용을"
+              " 권장합니다."
           )
 
-          st.markdown("### 제1여객터미널 평면도 기반 실시간 현황")
+          st.markdown("### 제1여객터미널 평면도 기반 출국장 혼잡도 현황")
           img_b64 = get_base64_image(FLOORPLAN_PATH)
 
           gate_coords = {
-    "DG1_W": (46, 91.5),
-    "DG1_E": (46, 96.5),
-    "DG2_W": (33, 81.5),
-    "DG2_E": (33, 86.5),
-    "DG3_W": (22, 65.5),
-    "DG3_E": (22, 70.5),
-    "DG4_W": (22, 34.5),
-    "DG4_E": (22, 39.5),
-    "DG5_W": (33, 18.5),
-    "DG5_E": (33, 23.5),
-    "DG6_W": (46, 5.5),
-    "DG6_E": (46, 10.5),
-}
-
+              "DG1_W": (46, 91.5),
+              "DG1_E": (46, 96.5),
+              "DG2_W": (33, 81.5),
+              "DG2_E": (33, 86.5),
+              "DG3_W": (22, 65.5),
+              "DG3_E": (22, 70.5),
+              "DG4_W": (22, 34.5),
+              "DG4_E": (22, 39.5),
+              "DG5_W": (33, 18.5),
+              "DG5_E": (33, 23.5),
+              "DG6_W": (46, 5.5),
+              "DG6_E": (46, 10.5),
+          }
 
           if img_b64:
             pins_html = "".join(
@@ -457,8 +459,8 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
           else:
             st.info(
                 f"평면도 이미지(`{FLOORPLAN_PATH}`)를 저장해 두면 평면도 위에"
-                " 실시간 수치가 오버레이됩니다. 아래 우측→좌측(1~6번) 현황"
-                " 보드를 함께 확인해 주세요."
+                " 출국장 혼잡도 수치가 오버레이됩니다. 아래 우측→좌측(1~6번)"
+                " 출국장 현황 보드를 함께 확인해 주세요."
             )
 
           right_to_left_gates = [3, 2, 1, 6, 5, 4]
@@ -514,7 +516,7 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
           )
           st.markdown(concourse_map_html, unsafe_allow_html=True)
 
-          with st.expander("실시간 전체 출국장 비교 데이터 보기"):
+          with st.expander("실시간 전체 출국장 혼잡도 비교 데이터 보기"):
             display_items = [
                 {k: v for k, v in row.items() if not k.startswith("_")}
                 for row in valid_items
@@ -524,7 +526,7 @@ if st.button("최적 보안검색대 배정 및 탑승권 발급"):
           with st.expander("API 연동 및 원천 응답 확인"):
             st.markdown(
                 f"- **데이터 출처:** 인천국제공항공사 OpenAPI"
-                f" (`getDepartureCongestion` · APOC 실시간 연동)\n"
+                f" (`getDepartureCongestion` · APOC 출국장 혼잡도 연동)\n"
                 f"- **조회 기준 시각:** `{fetched_at}`\n"
                 f"- **요청 엔드포인트:** `{url}`\n"
                 f"- **요청 파라미터:** `terminalId={api_terminal_id}`,"
