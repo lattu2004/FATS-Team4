@@ -24,6 +24,10 @@ SERVICE_KEY = "ddaabc379ff683cc00174904ea4b4c1e945a8a951a12f886ecded9fe791c9c16"
 BASE_URL = "https://apis.data.go.kr/B551177/statusOfDepartureCongestion"
 FLOORPLAN_PATH = "t1_floorplan.jpg"
 
+# 연휴 피크 포함 상시 미운영 출국장(1번, 6번) 배제 집합 및 보정 상수(안전계수 10명)
+EXCLUDED_GATE_NUMBERS = {1, 6}
+SAFETY_BUFFER = 10
+
 st.subheader("시스템 설정 및 승객 정보")
 terminal_id = st.selectbox(
     "터미널 선택", ["P01 (제1여객터미널)", "P03 (제2여객터미널)"]
@@ -55,6 +59,15 @@ t_id = "P01" if "P01" in terminal_id else "T2"
 api_terminal_id = "P01" if "P01" in terminal_id else "P03"
 
 
+def is_excluded_gate(gate_id: str) -> bool:
+  """1번·6번 출국장은 연휴 피크 여부와 무관하게 상시 미운영으로 배제한다."""
+  normalized = str(gate_id).strip().upper()
+  return any(
+      normalized.startswith(f"DG{num}_") or normalized == f"DG{num}"
+      for num in EXCLUDED_GATE_NUMBERS
+  )
+
+
 def get_friendly_gate_name(gate_id):
   gate_map = {
       "DG1_W": "제1 출국장 (서편)",
@@ -73,7 +86,10 @@ def get_friendly_gate_name(gate_id):
   return gate_map.get(gate_id, f"출국장 ({gate_id})")
 
 
-def is_currently_open(operating_time):
+def is_currently_open(operating_time, gate_id: str = ""):
+  if is_excluded_gate(gate_id):
+    return False
+
   if not operating_time or not isinstance(operating_time, str):
     return False
 
@@ -122,7 +138,7 @@ def render_map_pin(gate_id, gate_lookup, recommended_id, top_pct, left_pct):
   is_rec = gate_id == recommended_id
   side = "서" if gate_id.endswith("_W") else "동"
 
-  if not info or not info["_is_open"]:
+  if is_excluded_gate(gate_id) or not info or not info["_is_open"]:
     bg = "rgba(100, 116, 139, 0.86)"
     border = "1px solid #e2e8f0"
     line1 = f"{side}·미운영"
@@ -158,7 +174,13 @@ def render_gate_cell(gate_id, gate_lookup, recommended_id):
   info = gate_lookup.get(gate_id)
   is_rec = gate_id == recommended_id
 
-  if not info:
+  if is_excluded_gate(gate_id):
+    bg = "#f1f5f9"
+    border = "1px solid #cbd5e1"
+    status_text = "상시 미운영"
+    sub_text = "추천·배분 제외(1·6번)"
+    title_color = "#64748b"
+  elif not info:
     bg = "#f1f5f9"
     border = "1px solid #cbd5e1"
     status_text = "정보 없음"
@@ -277,22 +299,24 @@ if st.button("출국장 혼잡도 조회 및 탑승권 발급"):
             raw_gate_id = str(item.get("gateId", "")).strip()
             if not raw_gate_id:
               continue
+            excluded = is_excluded_gate(raw_gate_id)
             friendly_name = get_friendly_gate_name(raw_gate_id)
             operating_time = str(item.get("operatingTime", "") or "정보 없음")
-            is_open = is_currently_open(operating_time)
-            wait_time = int(item.get("waitTime", 999))
-            wait_length = int(item.get("waitLength", 999))
+            is_open = False if excluded else is_currently_open(operating_time, raw_gate_id)
+            wait_time = 999 if excluded else int(item.get("waitTime", 999))
+            wait_length = 0 if excluded else int(item.get("waitLength", 999))
 
             row_data = {
                 "_gate_id": raw_gate_id,
                 "출국장 구분": friendly_name,
-                "운영 여부": "운영 중" if is_open else "미운영",
-                "운영 시간": operating_time,
+                "운영 여부": "미운영(상시제외)" if excluded else ("운영 중" if is_open else "미운영"),
+                "운영 시간": "상시 미운영(1·6번)" if excluded else operating_time,
                 "예상 대기시간(분)": wait_time,
                 "대기 인원(명)": wait_length,
                 "대기 인원 비중(%)": 0.0,
                 "분산 배정 비율(%)": 0.0,
                 "_is_open": is_open,
+                "_is_excluded": excluded,
             }
             valid_items.append(row_data)
             gate_lookup[raw_gate_id] = row_data
@@ -305,8 +329,19 @@ if st.button("출국장 혼잡도 조회 및 탑승권 발급"):
               f" {data}"
           )
         else:
-          open_items = [x for x in valid_items if x["_is_open"]]
-          target_pool = open_items if open_items else valid_items
+          # 1번·6번 출국장은 연휴 피크 포함 상시 후보군에서 배제
+          eligible_items = [
+              x for x in valid_items if not x.get("_is_excluded", False)
+          ]
+          open_items = [x for x in eligible_items if x["_is_open"]]
+          target_pool = open_items if open_items else eligible_items
+
+          if not target_pool:
+            st.error(
+                "추천·분산 배정 가능한 가동 출국장이 없습니다(1·6번 출국장"
+                " 상시 제외)."
+            )
+            st.stop()
 
           # 각 출국장별 대기 인원 비중(%) 계산
           total_wait_people = sum(
@@ -320,10 +355,9 @@ if st.button("출국장 혼잡도 조회 및 탑승권 발급"):
                 else round(100.0 / len(target_pool), 1)
             )
 
-          # 여객 쏠림 방지: 대기 인원 반비례 가중치 기반 분산 배정
-          alpha = 10
+          # 여객 쏠림 방지: 보정 상수(SAFETY_BUFFER=10)를 반영한 역가중 분산 배정
           weights = [
-              1.0 / (max(item["대기 인원(명)"], 0) + alpha)
+              1.0 / (max(item["대기 인원(명)"], 0) + SAFETY_BUFFER)
               for item in target_pool
           ]
           total_weight = sum(weights)
@@ -336,12 +370,13 @@ if st.button("출국장 혼잡도 조회 및 탑승권 발급"):
 
           st.success(
               "실시간 출국장 혼잡도 분석 및 대기 인원 비율 기반 분산 배정이"
-              " 완료되었습니다."
+              " 완료되었습니다. (1·6번 미운영 출국장 배제 · 보정 상수 10명"
+              " 반영)"
           )
 
           if not open_items:
             st.info(
-                "현재 시간대 운영 중으로 확인된 출국장이 없어 전체 조회"
+                "현재 시간대 운영 중으로 확인된 출국장이 없어 1·6번을 제외한"
                 " 출국장 데이터 기준으로 안내합니다."
             )
 
@@ -443,21 +478,24 @@ if st.button("출국장 혼잡도 조회 및 탑승권 발급"):
             st.metric(
                 label="대기 인원 및 비중",
                 value=f"{best_gate['대기 인원(명)']}명 ({best_gate['대기 인원 비중(%)']}%)",
-                delta="전체 운영 출국장 대비",
+                delta="1·6번 제외 운영 출국장 대비",
             )
           with col3:
             st.metric(
                 label="분산 배정 비중",
                 value=f"{best_gate['분산 배정 비율(%)']}%",
-                delta="대기 인원 비율 분산 배정",
+                delta=f"보정 상수 {SAFETY_BUFFER}명 반영",
             )
 
           st.warning(
               f"**안내:** 한쪽 출국장 쏠림 방지를 위해 실시간 대기 인원"
-              f" 비중({best_gate['대기 인원 비중(%)']}%)을 반영한 분산"
-              f" 배정(비중 {best_gate['분산 배정 비율(%)']}%)으로"
+              f" 비중({best_gate['대기 인원 비중(%)']}%) 및 보정"
+              f" 상수({SAFETY_BUFFER}명)를 반영한 분산 배정(비중"
+              f" {best_gate['분산 배정 비율(%)']}%)으로"
               f" **{best_gate['출국장 구분']}** (운영시간:"
               f" {best_gate['운영 시간']}) 보안검색 구역 이용을 권장합니다."
+              " (1·6번 출국장은 연휴 피크 포함 상시 미운영으로 추천 대상에서"
+              " 제외)"
           )
 
           st.markdown("### 제1여객터미널 평면도 기반 출국장 혼잡도 현황")
