@@ -14,8 +14,9 @@ st.set_page_config(
 st.title("인천공항 TAM 기반 출국장 혼잡도·보안검색 안내 시스템")
 st.markdown(
     "인천국제공항공사 공식 OpenAPI(`getDepartureCongestion`)로 수집한"
-    " 실시간 APOC **출국장 혼잡도** 데이터를 바탕으로 **여객 쏠림을 방지하는"
-    " 분산 배정 알고리즘**을 적용해 출국장(보안검색 구역)을 안내합니다."
+    " 실시간 APOC **출국장 혼잡도** 데이터를 바탕으로 **대기 인원 비율에"
+    " 따른 분산 배정**을 적용해 출국장(보안검색 구역)을 안내하는 스마트"
+    " 발권 화면입니다."
 )
 st.markdown("---")
 
@@ -172,6 +173,7 @@ def render_gate_cell(gate_id, gate_lookup, recommended_id):
   else:
     wait_m = info["예상 대기시간(분)"]
     wait_p = info["대기 인원(명)"]
+    wait_pct = info["대기 인원 비중(%)"]
     alloc_pct = info["분산 배정 비율(%)"]
     if is_rec:
       bg = "#ecfdf5"
@@ -190,7 +192,7 @@ def render_gate_cell(gate_id, gate_lookup, recommended_id):
       border = "1px solid #fca5a5"
       title_color = "#991b1b"
     status_text = f"{wait_m}분 · {wait_p}명"
-    sub_text = f"배정비중 {alloc_pct}%"
+    sub_text = f"대기 {wait_pct}% → 배정 {alloc_pct}%"
 
   side_label = "서편" if gate_id.endswith("_W") else "동편"
   badge_html = (
@@ -288,6 +290,7 @@ if st.button("출국장 혼잡도 조회 및 탑승권 발급"):
                 "운영 시간": operating_time,
                 "예상 대기시간(분)": wait_time,
                 "대기 인원(명)": wait_length,
+                "대기 인원 비중(%)": 0.0,
                 "분산 배정 비율(%)": 0.0,
                 "_is_open": is_open,
             }
@@ -305,8 +308,20 @@ if st.button("출국장 혼잡도 조회 및 탑승권 발급"):
           open_items = [x for x in valid_items if x["_is_open"]]
           target_pool = open_items if open_items else valid_items
 
-          # 여객 쏠림 방지: 실시간 대기 인원의 역수를 가중치로 환산한 확률적 분산 배정
-          alpha = 10  # 0명 방지 및 과도한 편중 완화 스무딩 상수
+          # 각 출국장별 대기 인원 비중(%) 계산
+          total_wait_people = sum(
+              max(item["대기 인원(명)"], 0) for item in target_pool
+          )
+          for item in target_pool:
+            w_people = max(item["대기 인원(명)"], 0)
+            item["대기 인원 비중(%)"] = (
+                round((w_people / total_wait_people) * 100, 1)
+                if total_wait_people > 0
+                else round(100.0 / len(target_pool), 1)
+            )
+
+          # 여객 쏠림 방지: 대기 인원 반비례 가중치 기반 분산 배정
+          alpha = 10
           weights = [
               1.0 / (max(item["대기 인원(명)"], 0) + alpha)
               for item in target_pool
@@ -320,7 +335,7 @@ if st.button("출국장 혼잡도 조회 및 탑승권 발급"):
           recommended_id = best_gate["_gate_id"]
 
           st.success(
-              "실시간 출국장 혼잡도 분석 및 분산 배정 알고리즘 매칭이"
+              "실시간 출국장 혼잡도 분석 및 대기 인원 비율 기반 분산 배정이"
               " 완료되었습니다."
           )
 
@@ -401,7 +416,7 @@ if st.button("출국장 혼잡도 조회 및 탑승권 발급"):
         <div style="display: inline-block; background: #dbeafe; color: #1e40af; font-weight: 800; font-size: 12px; padding: 4px 10px; border-radius: 999px; margin-bottom: 12px;">{zone_display}</div>
         <div style="font-size: 10px; color: #64748b; font-weight: 700; letter-spacing: 0.5px;">RECOMMENDED DEPARTURE GATE</div>
         <div style="font-size: 15px; font-weight: 800; color: #0f766e; margin-top: 3px; line-height: 1.3;">{best_gate['출국장 구분']}</div>
-        <div style="font-size: 12px; color: #334155; margin-top: 6px;">예상 대기 <strong>{best_gate['예상 대기시간(분)']}분</strong> · 대기 <strong>{best_gate['대기 인원(명)']}명</strong></div>
+        <div style="font-size: 12px; color: #334155; margin-top: 6px;">예상 대기 <strong>{best_gate['예상 대기시간(분)']}분</strong> · 대기 <strong>{best_gate['대기 인원(명)']}명</strong> ({best_gate['대기 인원 비중(%)']}%)</div>
         <div style="font-size: 11px; color: #059669; font-weight: 700; margin-top: 4px;">분산 배정 비중 {best_gate['분산 배정 비율(%)']}%</div>
       </div>
       <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #cbd5e1;">
@@ -426,20 +441,21 @@ if st.button("출국장 혼잡도 조회 및 탑승권 발급"):
             )
           with col2:
             st.metric(
-                label="현재 대기 인원",
-                value=f"{best_gate['대기 인원(명)']}명",
-                delta="실시간 APOC 기준",
+                label="대기 인원 및 비중",
+                value=f"{best_gate['대기 인원(명)']}명 ({best_gate['대기 인원 비중(%)']}%)",
+                delta="전체 운영 출국장 대비",
             )
           with col3:
             st.metric(
                 label="분산 배정 비중",
                 value=f"{best_gate['분산 배정 비율(%)']}%",
-                delta="여유도 역수 가중치 적용",
+                delta="대기 인원 비율 분산 배정",
             )
 
           st.warning(
-              f"**안내:** 단일 출국장 쏠림 방지를 위해 실시간 대기 인원 비율 기반"
-              f" 분산 배정(비중 {best_gate['분산 배정 비율(%)']}%)으로"
+              f"**안내:** 한쪽 출국장 쏠림 방지를 위해 실시간 대기 인원"
+              f" 비중({best_gate['대기 인원 비중(%)']}%)을 반영한 분산"
+              f" 배정(비중 {best_gate['분산 배정 비율(%)']}%)으로"
               f" **{best_gate['출국장 구분']}** (운영시간:"
               f" {best_gate['운영 시간']}) 보안검색 구역 이용을 권장합니다."
           )
@@ -511,7 +527,8 @@ if st.button("출국장 혼잡도 조회 및 탑승권 발급"):
               ' color:#0f294a;">3층 출발장 출국장(우측 1번 → 좌측 6번 ·'
               " 서편/동편) 및 체크인(A~N) 구역 안내</div>"
               '<div style="font-size:11px; color:#475569;">표시 형식:'
-              " <strong>예상 대기시간 · 대기인원 / 배정비중</strong></div>"
+              " <strong>예상 대기시간 · 대기인원 / 대기비중 →"
+              " 배정비중</strong></div>"
               "</div>"
               '<div style="display:flex; justify-content:space-between;'
               " font-size:11px; font-weight:800; color:#1e3a8a;"
@@ -535,7 +552,10 @@ if st.button("출국장 혼잡도 조회 및 탑승권 발급"):
           )
           st.markdown(concourse_map_html, unsafe_allow_html=True)
 
-          with st.expander("실시간 전체 출국장 혼잡도 및 분산 배정 비율 보기"):
+          with st.expander(
+              "실시간 전체 출국장 혼잡도, 대기 인원 비중 및 분산 배정 비율"
+              " 보기"
+          ):
             display_items = [
                 {k: v for k, v in row.items() if not k.startswith("_")}
                 for row in valid_items
